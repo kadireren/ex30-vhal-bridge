@@ -3,8 +3,8 @@
 Son güncelleme: 2026-09-19
 
 Bu repo, `ex30-crowpanel-dashboard` projesinin ikinci aşamasıdır. Uygulama araç
-ünitesinde açıldığı anda foreground service başlatır, CrowPanel aboneliğini UDP
-4211'de dinler ve seçilen VHAL değerlerini UDP 4210'a yollar.
+ünitesinde açıldığı anda foreground service başlatır, CrowPanel'e BLE ile bağlanır
+ve seçilen VHAL değerlerini binary GATT paketleriyle yollar. UDP yolu yedektir.
 
 ## Tamamlanan yazılım
 
@@ -20,6 +20,11 @@ Bu repo, `ex30-crowpanel-dashboard` projesinin ikinci aşamasıdır. Uygulama ar
   de foreground service olarak çalışmayı sürdürüyor.
 - Debug APK ve mevcut EX30 anahtarıyla imzalanmış release AAB `releases/`
   altında saklandı.
+- CrowPanel özel servis UUID'siyle taranıyor; sensör seçimi read/notify kontrol
+  karakteristiğinden alınarak telemetri write-without-response karakteristiğine
+  en fazla yaklaşık 30 paket/saniye hızında aktarılıyor.
+- BLE paketi sürüm, sıra, monotonik zaman ve anahtar/değer çiftlerini içeriyor;
+  en yeni değer öncelikli ve eski/tekrarlı paketler panelde reddediliyor.
 
 ## Doğrulananlar
 
@@ -30,17 +35,17 @@ Bu repo, `ex30-crowpanel-dashboard` projesinin ikinci aşamasıdır. Uygulama ar
 ## Fiziksel doğrulama bekleyen işler
 
 - APK'yı gerçek EX30 ünitesine kurup uygulamanın VHAL izinlerini doğrula.
-- Araç Wi-Fi ayarlarından `EX30-CrowPanel` erişim noktasına bir kez elle bağlan.
-- Araç internetsiz SoftAP'te kalmıyorsa telefon hotspot'u, gerekirse fiziksel
-  mini router ile aynı UDP protokolünü test et.
+- Araç ünitesi BLE izinlerini verip CrowPanel bağlantısının Wi-Fi değiştirmeden
+  otomatik kurulmasını doğrula.
 - Seçilen sensör listesi değişince callback kayıtlarının gerçekten daraldığını
   ve panelde veri akışının kesintisiz güncellendiğini doğrula.
 - Hız, güç, SOC, menzil ve `NIGHT_MODE` değerlerini Sensor Lab sonuçlarıyla
   karşılaştır.
 - CrowPanel bağlantısı kesildiğinde servisin bekleme durumuna geçtiğini ve geri
   geldiğinde elle yeniden başlatmadan yayın yaptığını doğrula.
-- En az iki saatlik sürüş/park döngüsünde foreground service ve UDP kararlılığını
-  ölç.
+- Vgate istemci bağlantısı ile VHAL sunucu bağlantısı aynı anda açıkken en az iki
+  saatlik sürüş/park döngüsünde BLE gecikmesini, kopmayı ve otomatik yeniden
+  bağlanmayı ölç. UDP fallback'i ayrıca bir kez doğrula.
 
 ## Yeni bilgisayarda devam
 

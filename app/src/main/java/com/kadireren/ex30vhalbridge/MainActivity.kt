@@ -1,13 +1,16 @@
 package com.kadireren.ex30vhalbridge
 
+import android.Manifest
 import android.app.Activity
+import android.car.Car
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -25,7 +28,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildContent())
-        startBridge()
+        ensurePermissions()
     }
 
     override fun onStart() {
@@ -40,6 +43,57 @@ class MainActivity : Activity() {
 
     private fun startBridge() {
         startForegroundService(Intent(this, VhalBridgeService::class.java))
+    }
+
+    private fun reconnectBridge() {
+        startForegroundService(Intent(this, VhalBridgeService::class.java).setAction(VhalBridgeService.ACTION_RECONNECT))
+    }
+
+    private fun requiredPermissions(): Array<String> {
+        val permissions = mutableListOf(
+            Car.PERMISSION_SPEED,
+            Car.PERMISSION_ENERGY,
+            Car.PERMISSION_POWERTRAIN,
+            Car.PERMISSION_CAR_INFO,
+            Car.PERMISSION_ENERGY_PORTS,
+            Car.PERMISSION_EXTERIOR_ENVIRONMENT,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions += Manifest.permission.BLUETOOTH_SCAN
+            permissions += Manifest.permission.BLUETOOTH_CONNECT
+        } else {
+            permissions += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions += Manifest.permission.POST_NOTIFICATIONS
+        }
+        return permissions.toTypedArray()
+    }
+
+    private fun hasBluetoothPermissions(): Boolean {
+        val required = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        return required.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    }
+
+    private fun ensurePermissions() {
+        if (hasBluetoothPermissions()) startBridge()
+        val missing = requiredPermissions().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 30)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 30) return
+        if (hasBluetoothPermissions()) {
+            startBridge()
+            reconnectBridge()
+        } else {
+            BridgeState.save(this, "Bluetooth izni gerekli")
+        }
     }
 
     private fun buildContent(): LinearLayout = LinearLayout(this).apply {
@@ -61,7 +115,7 @@ class MainActivity : Activity() {
         }
         addView(status, layout(-1, 0, 1f))
         addView(TextView(this@MainActivity).apply {
-            text = "Uygulama açıldığında yayın otomatik başlar.\nCrowPanel hangi sensörleri isterse yalnız onlar VHAL'den okunur."
+            text = "Yayın arka planda sürer; ekranı kapatabilirsiniz.\nCrowPanel hangi sensörleri isterse yalnız onlar VHAL'den okunur."
             textSize = 18f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -79,7 +133,7 @@ class MainActivity : Activity() {
             addView(Button(this@MainActivity).apply {
                 text = "DURDUR"
                 setOnClickListener {
-                    startService(Intent(this@MainActivity, VhalBridgeService::class.java).setAction(VhalBridgeService.ACTION_STOP))
+                    startForegroundService(Intent(this@MainActivity, VhalBridgeService::class.java).setAction(VhalBridgeService.ACTION_STOP))
                 }
             }, layout(dp(180), dp(64), 0f))
         }, layout(-1, dp(90), 0f))

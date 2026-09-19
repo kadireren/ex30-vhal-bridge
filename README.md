@@ -1,10 +1,10 @@
 # EX30 VHAL Bridge
 
 EX30 araç ünitesindeki izin verilen VHAL property'lerini CrowPanel ESP32-S3'e
-yerel UDP ile gönderen küçük AAOS uygulaması.
+öncelikle BLE, isteğe bağlı yedek olarak yerel UDP ile gönderen küçük AAOS uygulaması.
 
 - Açılınca yayın servisini otomatik başlatır.
-- CrowPanel'in abonelik mesajında seçtiği property'leri okur.
+- CrowPanel'in BLE abonelik karakteristiğinde seçtiği property'leri okur.
 - Seçilmeyen property için callback kaydetmez.
 - Değişiklikleri en fazla yaklaşık 30 paket/saniye hızında birleştirir.
 - Sabit IP kullanmaz; UDP aboneliğinin geldiği adrese cevap verir.
@@ -30,12 +30,12 @@ Gradle Wrapper repoya dahildir. `local.properties` makineye özgü SDK yoludur v
 yeniden oluşturulmalıdır. Özel Play imza anahtarı güvenlik nedeniyle GitHub'a
 konmaz; repodaki AAB mevcut anahtarla imzalanmış hazır çıktıdır.
 
-Uygulama CrowPanel'in `EX30-CrowPanel` ağına bağlanmış araç ünitesinde
-çalıştırılır. CrowPanel UDP 4211'e abonelik yayını gönderir; uygulama UDP 4210'a
-telemetri yollar.
+Normal kullanımda araç ünitesi Wi-Fi ağı değiştirmeden CrowPanel'in özel BLE
+servisine bağlanır. Telemetri küçük binary paketlerle `write without response`
+üzerinden gönderilir; böylece araçtaki hücresel internet yönlendirmesi etkilenmez.
 
-Araç ünitesi Wi-Fi ayarlarından ağa bir kez elle bağlanmalıdır. EX30 internetsiz
-erişim noktasını bırakırsa aynı protokol telefon hotspot'u veya fiziksel mini
-router üzerinden değişiklik gerektirmeden çalışır.
+Eski Wi-Fi/UDP yolu geri dönüş seçeneği olarak korunmuştur. Kullanılırsa
+CrowPanel UDP 4211'e abonelik yayını gönderir ve uygulama UDP 4210'a telemetri
+yollar.
 
 Uygulanan plan ve sıradaki araç testleri: `docs/IMPLEMENTATION_STATUS.md`.
