@@ -38,6 +38,7 @@ class BleBridge(
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var telemetry: BluetoothGattCharacteristic? = null
     @Volatile private var running = false
+    @Volatile private var scanning = false
     @Volatile private var timeSyncPending = false
     private var sendTask: ScheduledFuture<*>? = null
     private val bluetoothReceiver = object : BroadcastReceiver() {
@@ -51,11 +52,23 @@ class BleBridge(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            if (gatt != null) return
             adapter?.bluetoothLeScanner?.stopScan(this)
-            onStatus("CrowPanel bulundu · BLE bağlanıyor")
-            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDeviceTransport.TRANSPORT_LE)
+            scanning = false
+            onStatus("Dashboard bulundu · BLE bağlanıyor")
+            val pendingGatt = result.device.connectGatt(context, false, gattCallback, BluetoothDeviceTransport.TRANSPORT_LE)
+            gatt = pendingGatt
+            executor.schedule({
+                if (gatt === pendingGatt && telemetry == null) {
+                    onStatus("BLE bağlantısı zaman aşımına uğradı · tekrar deneniyor")
+                    pendingGatt.disconnect()
+                    closeGatt(pendingGatt)
+                    scheduleScan()
+                }
+            }, CONNECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         }
         override fun onScanFailed(errorCode: Int) {
+            scanning = false
             onStatus("BLE tarama hatası: $errorCode")
             scheduleScan()
         }
@@ -65,11 +78,11 @@ class BleBridge(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 timeSyncPending = true
-                onStatus("CrowPanel bağlı · servisler okunuyor")
+                onStatus("Dashboard bağlı · servisler okunuyor")
                 if (!gatt.requestMtu(185)) gatt.discoverServices()
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
                 closeGatt(gatt)
-                onStatus("CrowPanel BLE bağlantısı bekleniyor")
+                onStatus("Dashboard BLE bağlantısı bekleniyor")
                 scheduleScan()
             }
         }
@@ -83,7 +96,7 @@ class BleBridge(
             telemetry = service?.getCharacteristic(BleProtocol.TELEMETRY_UUID)
             val subscription = service?.getCharacteristic(BleProtocol.SUBSCRIPTION_UUID)
             if (status != BluetoothGatt.GATT_SUCCESS || telemetry == null || subscription == null) {
-                onStatus("CrowPanel BLE servisi bulunamadı")
+                onStatus("Dashboard VHAL servisi bulunamadı")
                 gatt.disconnect()
                 return
             }
@@ -92,7 +105,7 @@ class BleBridge(
                 it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(it)
             } ?: gatt.readCharacteristic(subscription)
-            onStatus("CrowPanel BLE bağlı")
+            onStatus("Dashboard BLE bağlı")
         }
 
         override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
@@ -131,6 +144,7 @@ class BleBridge(
         sendTask?.cancel(true)
         runCatching { context.unregisterReceiver(bluetoothReceiver) }
         adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        scanning = false
         gatt?.let(::closeGatt)
         executor.shutdownNow()
     }
@@ -166,14 +180,28 @@ class BleBridge(
     }
 
     private fun startScan() {
-        if (!running || adapter?.isEnabled != true || gatt != null) {
+        if (!running || adapter?.isEnabled != true || gatt != null || scanning) {
             if (adapter?.isEnabled != true) onStatus("Bluetooth kapalı")
             return
         }
         val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(BleProtocol.SERVICE_UUID)).build()
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        adapter.bluetoothLeScanner?.startScan(listOf(filter), settings, scanCallback)
-        onStatus("CrowPanel BLE aranıyor")
+        val scanner = adapter.bluetoothLeScanner
+        if (scanner == null) {
+            onStatus("BLE tarayıcı kullanılamıyor")
+            scheduleScan()
+            return
+        }
+        scanning = true
+        scanner.startScan(listOf(filter), settings, scanCallback)
+        onStatus("iPhone/CrowPanel BLE aranıyor")
+        executor.schedule({
+            if (running && scanning && gatt == null) {
+                scanner.stopScan(scanCallback)
+                scanning = false
+                scheduleScan()
+            }
+        }, SCAN_WINDOW_SECONDS, TimeUnit.SECONDS)
     }
 
     private fun scheduleScan() {
@@ -187,5 +215,9 @@ class BleBridge(
     }
 
     private object BluetoothDeviceTransport { const val TRANSPORT_LE = 2 }
-    companion object { private val CLIENT_CONFIG_UUID = java.util.UUID.fromString("00002902-0000-1000-8000-00805f9b34fb") }
+    companion object {
+        private const val SCAN_WINDOW_SECONDS = 12L
+        private const val CONNECTION_TIMEOUT_SECONDS = 15L
+        private val CLIENT_CONFIG_UUID = java.util.UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    }
 }

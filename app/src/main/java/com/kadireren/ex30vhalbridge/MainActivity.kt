@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         }
         addView(status, layout(-1, 0, 1f))
         addView(TextView(this@MainActivity).apply {
-            text = "Yayın arka planda sürer; ekranı kapatabilirsiniz.\nCrowPanel hangi sensörleri isterse yalnız onlar VHAL'den okunur."
+            text = "Yayın arka planda sürer; ekranı kapatabilirsiniz.\niPhone veya CrowPanel hangi sensörleri isterse yalnız onlar VHAL'den okunur."
             textSize = 18f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER

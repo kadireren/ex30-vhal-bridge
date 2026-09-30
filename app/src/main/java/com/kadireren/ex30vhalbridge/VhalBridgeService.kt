@@ -103,7 +103,7 @@ class VhalBridgeService : Service() {
                 }
                 val failures = reader?.configure(requestedKeys).orEmpty()
                 setStatus(
-                    if (requestedKeys.isEmpty()) "VHAL hazır · CrowPanel BLE bekleniyor"
+                    if (requestedKeys.isEmpty()) "VHAL hazır · Dashboard BLE bekleniyor"
                     else "BLE yayın aktif · ${requestedKeys.size - failures.size} sensör"
                 )
             }

@@ -4,5 +4,13 @@ local.properties
 **/build/
 .DS_Store
 *.jks
+*.keystore
+*.p12
+*.pem
 keystore.properties
+.env
+.env.*
+credentials*
+secrets*
+*.key
 # Paylaşılacak hazır APK/AAB dosyaları releases/ altında takip edilir.
